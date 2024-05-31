@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Polly;
 using TestProject1.Abstractions;
 using TestProject1.WebServices;
 
@@ -8,40 +10,40 @@ namespace TestProject1.Cads;
 public class CadHandlerProxy<TCadRequest, TResponse>: ICadHandler<TCadRequest, TResponse>
 {
     private readonly IDistributedCache _distributedCache;
-    private readonly IManagingNode _managingNode;
-    private readonly IServiceScope _scope;
     private readonly IRemoteCadHandlerFactory _remoteCadHandlerFactory;
     private readonly ICluster _cluster;
+    private readonly ILogger<CadHandlerProxy<TCadRequest, TResponse>> _logger;
 
     public CadHandlerProxy(
         IDistributedCache distributedCache, 
-        IManagingNode managingNode, 
-        IServiceScope scope,
         IRemoteCadHandlerFactory remoteCadHandlerFactory,
-        ICluster cluster)
+        ICluster cluster,
+        ILogger<CadHandlerProxy<TCadRequest, TResponse>> logger)
     {
         _distributedCache = distributedCache;
-        _managingNode = managingNode;
-        _scope = scope;
         _remoteCadHandlerFactory = remoteCadHandlerFactory;
         _cluster = cluster;
+        _logger = logger;
     }
 
-    private async Task<IManagingNodeDescriptor> FindFirstAvailableNode()
+    private async Task<IManagingNodeDescriptor> FindAvailableNode()
     {
         const double memoryUsageThreshold = 0.9;
 
-        if ((await _managingNode.Descriptor.GetMemoryUsageAsync()) < memoryUsageThreshold)
-        {
-            return _managingNode.Descriptor;
-        }
-
         foreach (var nodeDescriptor in await _cluster.GetNodes())
         {
-            if ((await nodeDescriptor.GetMemoryUsageAsync()) < memoryUsageThreshold)
+            try
             {
-                return nodeDescriptor;
+                if ((await nodeDescriptor.GetMemoryUsageAsync()) < memoryUsageThreshold)
+                {
+                    return nodeDescriptor;
+                }
             }
+            catch (Exception e)
+            {
+                _logger.LogError(e, e.Message);
+            }
+            
         }
 
         //TODO wait and retry?
@@ -52,18 +54,46 @@ public class CadHandlerProxy<TCadRequest, TResponse>: ICadHandler<TCadRequest, T
     {
         var cadKey = $"CadHandlerProxy-{request.OrganizationId}-{request.PrcId}";
 
+        var handler = await FindOrInitializeHandler(request, cadKey);
+
+        return await handler.HandleAsync(request);
+    }
+
+    private async Task<ICadHandler<TCadRequest, TResponse>> FindOrInitializeHandler(
+        CadContextRequest<TCadRequest> request, string cadKey)
+    {
+        var policy = Policy
+            .Handle<Exception>()
+            .WaitAndRetryAsync(
+                3,
+                attempt => TimeSpan.FromSeconds(10 * attempt)
+            );
+
+
         var uri = await _distributedCache.GetStringAsync(cadKey);
 
-        if (uri == null)
+        var result = await policy.ExecuteAsync(async () =>
         {
-            var availableNode = await FindFirstAvailableNode();
-            uri = availableNode.Url;
-        }
+            if (uri == null)
+            {
+                var node = await FindAvailableNode();
+                uri = node.Url;
+            }
 
-        var handler = uri == _managingNode.Descriptor.Url
-            ? _scope.ServiceProvider.GetRequiredKeyedService<ICadHandler<TCadRequest, TResponse>>("local")
-            : await _remoteCadHandlerFactory.Get<TCadRequest, TResponse>(uri);
-        
-        return await handler.HandleAsync(request);
+            var handler = await _remoteCadHandlerFactory.Get<TCadRequest, TResponse>(uri);
+
+            await handler.PingAsync();
+
+            await _distributedCache.SetStringAsync(cadKey, uri);
+
+            return handler;
+        });
+
+        return result;
+    }
+
+    public Task PingAsync()
+    {
+        throw new NotImplementedException();
     }
 }
