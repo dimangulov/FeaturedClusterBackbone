@@ -1,6 +1,6 @@
-﻿namespace TestProject1.Abstractions;
+﻿namespace ClassLibrary1.Abstractions;
 
-public interface IManagingNodeDescriptor
+public interface INodeDescriptor
 {
     string Url { get; }
 

@@ -1,6 +1,6 @@
-﻿namespace TestProject1.WebServices;
+﻿namespace ClassLibrary1.WebServices;
 
-public interface ICadRequest
+public class CadPresentedRequest : ICadRequest
 {
     public string OrganizationId { get; set; }
     public string PrcId { get; set; }

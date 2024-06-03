@@ -1,4 +1,4 @@
-﻿namespace TestProject1.WebServices;
+﻿namespace ClassLibrary1.WebServices;
 
 public interface ICadWebServiceFactory
 {

@@ -1,12 +1,12 @@
-﻿namespace TestProject1.Abstractions
+﻿namespace ClassLibrary1.Abstractions
 {
     /// <summary>
     /// The node should re-register in the cluster from time to time?
     /// Cluster should validate its state?
     /// </summary>
-    public interface IManagingNode
+    public interface INodeHosting
     {
-        IManagingNodeDescriptor Descriptor { get; }
+        INodeDescriptor Descriptor { get; }
         Task StartAsync();
         Task StopAsync();
     }
