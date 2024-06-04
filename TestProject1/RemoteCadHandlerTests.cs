@@ -99,11 +99,6 @@ public class RemoteCadHandlerTests
     where TRequest: ICadRequest
     {
         var requestType = requestObject.GetType();
-        if (!_webserviceCallsToRequestMap.ContainsKey(requestType))
-        {
-            throw new NotSupportedException($"{requestType.Name} doesn't have service call name configured");
-        }
-
         var method = _webserviceCallsToRequestMap[requestType];
 
         var serviceParameter = Expression.Parameter(typeof(ICadWebService));
@@ -111,5 +106,15 @@ public class RemoteCadHandlerTests
         var expr = Expression.Call(serviceParameter, typeof(ICadWebService).GetMethod(method.Item1), requestParam);
         var lambda = Expression.Lambda<Func<ICadWebService, Task<TReply>>>(expr, serviceParameter);
         _service.Setup<Task<TReply>>(lambda).ReturnsAsync(replyObject);
+    }
+
+    [Fact]
+    public async Task PingTest()
+    {
+        _service.Setup(x => x.HealthyAsync()).ReturnsAsync(true);
+
+        await _handler.PingAsync();
+
+        _service.Verify(x => x.HealthyAsync());
     }
 }
