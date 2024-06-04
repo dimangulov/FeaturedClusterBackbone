@@ -4,8 +4,8 @@ namespace ClassLibrary1.Cads;
 
 public class RemoteCadHandlerFactory: IRemoteCadHandlerFactory
 {
-    public Task<ICadHandler<TCadRequest, TResponse>> Get<TCadRequest, TResponse>(string uri) where TCadRequest : ICadRequest
+    public Task<ICadHandler> Get(string uri)
     {
-        throw new NotImplementedException();
+        return Task.FromResult<ICadHandler>(new RemoteCadHandler(new CadWebService(uri)));
     }
 }

@@ -2,9 +2,9 @@
 
 namespace ClassLibrary1.Cads;
 
-public interface ICadHandler<TRequest, TResponse>
-    where TRequest: ICadRequest
+public interface ICadHandler
 {
-    Task<TResponse> HandleAsync(TRequest request);
+    Task<TResponse> HandleAsync<TRequest, TResponse>(TRequest request)
+        where TRequest : ICadRequest;
     Task PingAsync();
 }

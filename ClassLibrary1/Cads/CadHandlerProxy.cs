@@ -1,24 +1,22 @@
 ﻿using ClassLibrary1.Abstractions;
 using ClassLibrary1.WebServices;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Polly;
 
 namespace ClassLibrary1.Cads;
 
-public class CadHandlerProxy<TCadRequest, TResponse>: ICadHandler<TCadRequest, TResponse> 
-    where TCadRequest : ICadRequest
+public class CadHandlerProxy: ICadHandler
 {
     private readonly ICadLocator _cadLocator;
     private readonly IRemoteCadHandlerFactory _remoteCadHandlerFactory;
     private readonly INodeAvailabilityStrategy _nodeAvailabilityStrategy;
-    private readonly ILogger<CadHandlerProxy<TCadRequest, TResponse>> _logger;
+    private readonly ILogger<CadHandlerProxy> _logger;
 
     public CadHandlerProxy(
         ICadLocator cadLocator,
         IRemoteCadHandlerFactory remoteCadHandlerFactory,
         INodeAvailabilityStrategy nodeAvailabilityStrategy,
-        ILogger<CadHandlerProxy<TCadRequest, TResponse>> logger)
+        ILogger<CadHandlerProxy> logger)
     {
         _cadLocator = cadLocator;
         _remoteCadHandlerFactory = remoteCadHandlerFactory;
@@ -26,15 +24,17 @@ public class CadHandlerProxy<TCadRequest, TResponse>: ICadHandler<TCadRequest, T
         _logger = logger;
     }
 
-    public async Task<TResponse> HandleAsync(TCadRequest request)
+    public async Task<TResponse> HandleAsync<TCadRequest, TResponse>(TCadRequest request)
+        where TCadRequest : ICadRequest
     {
         var handler = await FindOrInitializeHandler(request);
 
-        return await handler.HandleAsync(request);
+        return await handler.HandleAsync<TCadRequest, TResponse>(request);
     }
 
-    private async Task<ICadHandler<TCadRequest, TResponse>> FindOrInitializeHandler(
+    private async Task<ICadHandler> FindOrInitializeHandler<TCadRequest>(
         TCadRequest request)
+        where TCadRequest : ICadRequest
     {
         var policy = Policy
             .Handle<Exception>()
@@ -54,7 +54,7 @@ public class CadHandlerProxy<TCadRequest, TResponse>: ICadHandler<TCadRequest, T
                 uri = node.Url;
             }
 
-            var handler = await _remoteCadHandlerFactory.Get<TCadRequest, TResponse>(uri);
+            var handler = await _remoteCadHandlerFactory.Get(uri);
 
             await handler.PingAsync();
 

@@ -15,7 +15,7 @@ namespace TestProject1
         private Mock<IRemoteCadHandlerFactory> _remoteCadHandlerFactory;
         private readonly Mock<INodeAvailabilityStrategy> _nodeAvailabilityStrategy;
         private readonly Mock<INodeDescriptor> _node;
-        private readonly Mock<ICadHandler<CadPresentedRequest, CadPresentedReply>> _nodeCadHandler;
+        private readonly Mock<ICadHandler> _nodeCadHandler;
         private readonly Mock<ICadLocator> _cadLocator;
 
         public CadHandlerProxyTests()
@@ -28,9 +28,9 @@ namespace TestProject1
             _node = new Mock<INodeDescriptor>(MockBehavior.Strict);
             _node.SetupGet(x => x.Url).Returns($"https://{Guid.NewGuid().ToString()}/");
 
-            _nodeCadHandler = new Mock<ICadHandler<CadPresentedRequest, CadPresentedReply>>(MockBehavior.Strict);
+            _nodeCadHandler = new Mock<ICadHandler>(MockBehavior.Strict);
             _nodeCadHandler.Setup(x => x.PingAsync()).Returns(Task.CompletedTask);
-            _remoteCadHandlerFactory.Setup(x => x.Get<CadPresentedRequest, CadPresentedReply>(_node.Object.Url))
+            _remoteCadHandlerFactory.Setup(x => x.Get(_node.Object.Url))
                 .ReturnsAsync(_nodeCadHandler.Object);
 
             _nodeAvailabilityStrategy.Setup(x => x.GetAvailableNode()).ReturnsAsync(_node.Object);
@@ -48,16 +48,16 @@ namespace TestProject1
 
             SetupNodeCadHandler_Handle_Call(request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             result.Found.Should().Be(expectedResult.Found);
         }
 
         private void SetupNodeCadHandler_Handle_Call(CadPresentedRequest request, CadPresentedReply reply)
         {
-            _nodeCadHandler.Setup(x => x.HandleAsync(request)).ReturnsAsync(reply);
+            _nodeCadHandler.Setup(x => x.HandleAsync<CadPresentedRequest, CadPresentedReply>(request)).ReturnsAsync(reply);
         }
 
         [Fact]
@@ -71,9 +71,9 @@ namespace TestProject1
             };
             SetupNodeCadHandler_Handle_Call(request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             _nodeCadHandler.Verify(x => x.PingAsync());
         }
@@ -89,9 +89,9 @@ namespace TestProject1
             };
             SetupNodeCadHandler_Handle_Call(request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             _cadLocator.Verify(x => x.SetCadNode(request.OrganizationId, request.PrcId, _node.Object.Url));
         }
@@ -107,7 +107,7 @@ namespace TestProject1
             };
             SetupNodeCadHandler_Handle_Call(request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
             var attempt1Thrown = false;
             _nodeCadHandler.Setup(x => x.PingAsync())
@@ -122,7 +122,7 @@ namespace TestProject1
                     return Task.CompletedTask;
                 });
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             _nodeCadHandler.Verify(x => x.PingAsync());
         }
@@ -158,11 +158,10 @@ namespace TestProject1
             return (request, nodeUri);
         }
 
-        private ICadHandler<TCadRequest, TResponse> BuildProxy<TCadRequest, TResponse>() 
-            where TCadRequest : ICadRequest
+        private ICadHandler BuildProxy() 
         {
-            var logger = new Mock<ILogger<CadHandlerProxy<TCadRequest, TResponse>>>();
-            return new CadHandlerProxy<TCadRequest, TResponse>(_cadLocator.Object, _remoteCadHandlerFactory.Object,
+            var logger = new Mock<ILogger<CadHandlerProxy>>();
+            return new CadHandlerProxy(_cadLocator.Object, _remoteCadHandlerFactory.Object,
                 _nodeAvailabilityStrategy.Object, logger.Object);
         }
 
@@ -178,9 +177,9 @@ namespace TestProject1
 
             var handler = SetupCustomCadHandler_Handle_Call(nodeUri, request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             result.Found.Should().Be(expectedResult.Found);
         }
@@ -197,21 +196,21 @@ namespace TestProject1
 
             var handler = SetupCustomCadHandler_Handle_Call(nodeUri, request, expectedResult);
 
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
 
-            var result = await proxy.HandleAsync(request);
+            var result = await proxy.HandleAsync<CadPresentedRequest, CadPresentedReply>(request);
 
             handler.Verify(x => x.PingAsync());
         }
 
-        private Mock<ICadHandler<CadPresentedRequest, CadPresentedReply>> SetupCustomCadHandler_Handle_Call(string nodeUri, CadPresentedRequest request, CadPresentedReply reply)
+        private Mock<ICadHandler> SetupCustomCadHandler_Handle_Call(string nodeUri, CadPresentedRequest request, CadPresentedReply reply)
         {
-            var handler = new Mock<ICadHandler<CadPresentedRequest, CadPresentedReply>>(MockBehavior.Strict);
+            var handler = new Mock<ICadHandler>(MockBehavior.Strict);
 
-            handler.Setup(x => x.HandleAsync(request)).ReturnsAsync(reply);
+            handler.Setup(x => x.HandleAsync<CadPresentedRequest, CadPresentedReply>(request)).ReturnsAsync(reply);
             handler.Setup(x => x.PingAsync()).Returns(Task.CompletedTask);
 
-            _remoteCadHandlerFactory.Setup(x => x.Get<CadPresentedRequest, CadPresentedReply>(nodeUri))
+            _remoteCadHandlerFactory.Setup(x => x.Get(nodeUri))
                 .ReturnsAsync(handler.Object);
 
             return handler;
@@ -220,7 +219,7 @@ namespace TestProject1
         [Fact]
         public async Task PingIsNotUsed()
         {
-            var proxy = BuildProxy<CadPresentedRequest, CadPresentedReply>();
+            var proxy = BuildProxy();
             Func<Task> f = () => proxy.PingAsync();
             await f.Should().ThrowAsync<NotImplementedException>();
         }

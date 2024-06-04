@@ -2,6 +2,13 @@
 
 public class CadWebService: ICadWebService
 {
+    private readonly string _uri;
+
+    public CadWebService(string uri)
+    {
+        _uri = uri;
+    }
+
     public Task<CadPresentedReply> CadPresentedAsync(CadPresentedRequest request)
     {
         throw new NotImplementedException();

@@ -3,5 +3,7 @@
 public interface ICadWebService
 {
     Task<CadPresentedReply> CadPresentedAsync(CadPresentedRequest request);
+
+    [IgnoreCadMethod]
     Task<bool> HealthyAsync();
 }
